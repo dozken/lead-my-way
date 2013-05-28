@@ -1,6 +1,7 @@
 package org.opencv.samples.facedetect;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 
@@ -19,14 +20,24 @@ import org.opencv.core.Scalar;
 import org.opencv.core.Size;
 import org.opencv.objdetect.CascadeClassifier;
 
+import com.activeandroid.ActiveAndroid;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.drawable.Drawable;
+import android.media.MediaPlayer;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.CountDownTimer;
+import android.os.Environment;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.ImageView;
 
 public class FdActivity extends Activity implements CvCameraViewListener2 {
 
@@ -35,11 +46,41 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 	private Mat                    mRgba;
 	private Mat                    mGray;
 
-	private CascadeClassifier      cc1;
-	private CascadeClassifier      cc2;
+
+	//private CascadeClassifier      cc2;
 
 	private CameraBridgeViewBase   mOpenCvCameraView;
+	MediaPlayer mp;
 
+	private java.util.AbstractList<CascadeClassifier> cascades = new java.util.ArrayList<CascadeClassifier>();
+
+	private final String PROJECT_DIR = "LeadMyWay/";
+	private final String CASCADE_DIR = "cascade/";
+	private final String IMAGE_DIR   = "image/";
+	private final String AUDIO_DIR   = "audio/";
+	ImageView imgView;
+	private class DownloadFilesTask extends AsyncTask<Void, Void, Void> {
+		String image ;
+		 public DownloadFilesTask (String image){
+			 this.image = image;
+		 }
+
+		             @Override
+		             protected Void doInBackground(Void... params) {
+		            	
+		              return null;
+		             }
+		             protected void onPostExecute(Void result) {
+		            	 File imgFile = new  File(Environment.getExternalStorageDirectory()
+			         				.getAbsolutePath()+File.separator+PROJECT_DIR+IMAGE_DIR+image);
+			         		if(imgFile.exists()){
+			         			Bitmap myBitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
+
+			         			imgView.setImageBitmap(myBitmap);
+			         		}
+		            }          
+		        } 
+	
 	private BaseLoaderCallback  mLoaderCallback = new BaseLoaderCallback(this) {
 		@Override
 		public void onManagerConnected(int status) {
@@ -52,23 +93,20 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 				System.loadLibrary("detection_based_tracker");
 
 				try {
-					// load cascade file from application resources
-					InputStream is1 = getResources().openRawResource(R.raw.stop);
-					File cascadeDir1 = getDir("cascade", Context.MODE_PRIVATE);
-					File mCascadeFile1 = new File(cascadeDir1, "stop.xml");
-					FileOutputStream os1 = new FileOutputStream(mCascadeFile1);
 
-					byte[] buffer = new byte[4096];
-					int bytesRead;
-					while ((bytesRead = is1.read(buffer)) != -1) {
-						os1.write(buffer, 0, bytesRead);
+					File cascadeFiles = new File(Environment.getExternalStorageDirectory()
+							.getAbsolutePath(), PROJECT_DIR+CASCADE_DIR);
+
+
+					for(File cascadeFile : cascadeFiles.listFiles()){
+						CascadeClassifier cc = new CascadeClassifier(cascadeFile.getAbsolutePath());
+						cascades.add(cc);
 					}
-					is1.close();
-					os1.close();
 
-					cc1 = new CascadeClassifier(mCascadeFile1.getAbsolutePath());
-					cascadeDir1.delete();
 
+					// load cascade file from application resources
+
+					/*
 					InputStream is2 = getResources().openRawResource(R.raw.obhod);
 					File cascadeDir2 = getDir("cascade", Context.MODE_PRIVATE);
 					File mCascadeFile2 = new File(cascadeDir2, "obhod.xml");
@@ -84,6 +122,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
 					cc2 = new CascadeClassifier(mCascadeFile2.getAbsolutePath());
 					cascadeDir2.delete();
+					 */
 					//if (mJavaDetector.empty()) {
 					//    Log.e(TAG, "Failed to load cascade classifier");
 					//    mJavaDetector = null;
@@ -116,6 +155,8 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 		//mDetectorName[JAVA_DETECTOR] = "Java";
 		//mDetectorName[NATIVE_DETECTOR] = "Native (tracking)";
 
+
+
 		Log.i(TAG, "Instantiated new " + this.getClass());
 	}
 
@@ -124,10 +165,22 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 	public void onCreate(Bundle savedInstanceState) {
 		Log.i(TAG, "called onCreate");
 		super.onCreate(savedInstanceState);
+		//ActiveAndroid.initialize(this);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
+		
 		setContentView(R.layout.face_detect_surface_view);
+		imgView = (ImageView) findViewById(R.id.imageView1);
+		 CountDownTimer cntr_aCounter = new CountDownTimer(3000, 1000) {
+		        public void onTick(long millisUntilFinished) {
+		        	audioPlayer("a.mp3");
+		        	}
 
+		        public void onFinish() {
+		            //code fire after finish
+		        	mp.stop();
+		        }
+		        };
+		        cntr_aCounter.start();
 		mOpenCvCameraView = (CameraBridgeViewBase) findViewById(R.id.fd_activity_surface_view);
 		mOpenCvCameraView.setCvCameraViewListener(this);
 	}
@@ -149,6 +202,7 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
 	public void onDestroy() {
 		super.onDestroy();
+		ActiveAndroid.dispose();
 		mOpenCvCameraView.disableView();
 	}
 
@@ -164,74 +218,52 @@ public class FdActivity extends Activity implements CvCameraViewListener2 {
 
 	@Override
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
-
 		mRgba = inputFrame.rgba();
 		mGray = inputFrame.gray();
-
 		MatOfRect faces = new MatOfRect();
-
-		detectAndDisplay(faces,cc1);
-		detectAndDisplay(faces,cc2);
-
+		new DownloadFilesTask("Koala.jpg").execute();
+		for(CascadeClassifier cc : cascades)
+			detectAndDisplay(faces,cc);
 		return mRgba;
 	}
 	
-	static boolean flag = true;
-	
+	public void audioPlayer(String fileName){
+	    //set up MediaPlayer    
+	    mp = new MediaPlayer();
+	    try {
+	    	FileInputStream fileInputStream = new FileInputStream(Environment.getExternalStorageDirectory().getAbsolutePath()+File.separator+PROJECT_DIR+AUDIO_DIR+fileName);
+	        mp.setDataSource(fileInputStream .getFD());
+	        mp.prepare();
+	        mp.setLooping(true);
+	        mp.start();
+	    } catch (Exception e) {
+	    	Log.e(TAG+"MediaPlayer", "MediaPlayer "+e);
+	        e.printStackTrace();
+	    }
+	}
+
 	void detectAndDisplay( MatOfRect faces, CascadeClassifier cc ){
-		//cc.detectMultiScale(mGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
-			//	new Size(mAbsoluteFaceSize, mAbsoluteFaceSize), new Size());
+		cc.detectMultiScale(mGray, faces, 1.1, 2, 2, // TODO: objdetect.CV_HAAR_SCALE_IMAGE
+			new Size(0, 0), new Size());
 		cc.detectMultiScale(mGray, faces);
 		Rect[] facesArray = faces.toArray();
-		
+
 		for (int i = 0; i < facesArray.length; i++){
 			Point centerPoint = new Point ( facesArray[i].x + facesArray[i].width*0.5, facesArray[i].y + facesArray[i].height*0.5 );
 			//Core.rectangle(mRgba, facesArray[i].tl(), facesArray[i].br(), FACE_RECT_COLOR, 3);
 			//Core.circle(mRgba, center, facesArray[i].width/2, new Scalar( 255, 0, 255));
 			Point textPoint = new Point ( facesArray[i].x + facesArray[i].width*0.2, facesArray[i].y + facesArray[i].height*0.5 );
-			
+
 			Core.ellipse( mRgba, centerPoint, new Size( facesArray[i].width*0.5, facesArray[i].height*0.5), 0, 0, 360, new Scalar( 0, 255, 0 ), 4, 8, 0 );
 			Core.putText(mRgba, "Sign", textPoint, 2, 1, new Scalar(255, 255, 0), 3);
+			
+			
+			new DownloadFilesTask("stop.png").execute();
 
-			if(!flag){
-				FdActivity.flag = false;
-				Intent inf=new Intent(FdActivity.this,Activityfullscreen.class);
 
-				startActivity(inf);
-			}
+			
 
-			//MatOfInt p = new MatOfInt(100);
-			//Highgui.imwrite("/sdcard/Download/image_" + Integer.toString(i) + ".jpg", mRgba.submat(facesArray[i]), p);
-			//Toast.makeText(this, "yeaho", 1000);
-			Log.e("tapty", "Detection method tapty!");
+			Log.e(TAG, "Detection method tapty!");
 		}
 	}
-
-	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		Log.i(TAG, "called onCreateOptionsMenu");
-		return true;
-	}
-
-	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
-		Log.i(TAG, "called onOptionsItemSelected; selected item: " + item);
-		/*if (item == mItemFace50)
-            setMinFaceSize(0.5f);
-        else if (item == mItemFace40)
-            setMinFaceSize(0.4f);
-        else if (item == mItemFace30)
-            setMinFaceSize(0.3f);
-        else if (item == mItemFace20)
-            setMinFaceSize(0.2f);
-        else
-        if (item == mItemType) {
-            mDetectorType = (mDetectorType + 1) % mDetectorName.length;
-            item.setTitle(mDetectorNames[mDetectorType]);
-            setDetectorType(mDetectorType);
-        }
-		 */
-		return true;
-	}
-
 }
